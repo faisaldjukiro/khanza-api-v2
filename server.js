@@ -6,6 +6,8 @@ const app = express();
 const md5 = require('md5'); 
 const db = require('./config/db');
 const apiRoutes = require('./routes/api');
+const apiJasa = require('./routes/api-jasa');
+
 
 dotenv.config();
 app.use(express.json());
@@ -52,6 +54,8 @@ app.post('/login', (req, res) => {
 
 
 app.use('/api', apiRoutes);
+app.use('/api-jasa', apiJasa);
+
 
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => console.log(`Server berjalan di port ${PORT}`));

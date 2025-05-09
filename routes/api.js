@@ -3,12 +3,13 @@ const router = express.Router();
 const db = require('../config/db');
 const multer = require('multer');
 const path = require('path');
+const fs = require('fs'); 
 const verifyToken = require('../middleware/verifyToken');
 
 const storage = multer.diskStorage({
   destination: function (req, file, cb) {
-    // cb(null, path.join(__dirname, '/../webapps/berkasrawat/pages/upload/'));
-    cb(null, path.join(__dirname, '../berkas'));
+    cb(null, path.join(__dirname, '../../webapps/berkasrawat/pages/upload/'));
+    // cb(null, path.join(__dirname, '../berkas'));
 
   },
   filename: function (req, file, cb) {
@@ -33,9 +34,10 @@ router.post('/pasien', verifyToken, (req, res) => {
     JOIN pasien c ON b.no_rkm_medis = c.no_rkm_medis
     JOIN kamar d ON a.kd_kamar = d.kd_kamar
     JOIN bangsal e ON d.kd_bangsal = e.kd_bangsal
-    WHERE a.stts_pulang = '-' AND b.no_rkm_medis != 'XXXXXX'
+    WHERE a.stts_pulang = '-' 
     ORDER BY a.tgl_masuk DESC
   `;
+    // AND b.no_rkm_medis != 'XXXXXX'
 
   db.query(query, (err, results) => {
     if (err) {
@@ -151,6 +153,69 @@ router.post('/tambah-berkas', verifyToken, upload.single('file'), (req, res) => 
       }
     });
   });
+});
+
+router.post('/upload-draft', verifyToken, upload.single('file'), (req, res) => {
+  const { no_rawat } = req.body;
+
+  if (!req.file || !no_rawat) {
+    return res.status(400).json({ status: 'error', message: 'Data tidak lengkap' });
+  }
+
+  const sanitizedNoRawat = no_rawat.replace(/\//g, '_');
+  const draftDir = path.join(__dirname, '../../webapps/berkasrawat/pages/upload/draft');
+
+  if (!fs.existsSync(draftDir)) fs.mkdirSync(draftDir, { recursive: true });
+
+  const fileExtension = path.extname(req.file.originalname);
+  const newFilename = `${sanitizedNoRawat}${fileExtension}`;
+  const newPath = path.join(draftDir, newFilename);
+
+  try {
+    const possibleExt = ['.jpg', '.jpeg', '.png', '.pdf'];
+    possibleExt.forEach(ext => {
+      const possibleFile = path.join(draftDir, `${sanitizedNoRawat}${ext}`);
+      if (fs.existsSync(possibleFile)) {
+        fs.unlinkSync(possibleFile);
+        console.log(`File lama dihapus: ${possibleFile}`);
+      }
+    });
+
+    fs.copyFileSync(req.file.path, newPath);
+
+    return res.status(200).json({ status: 'success', message: 'Draft berhasil disimpan' });
+  } catch (err) {
+    return res.status(500).json({ status: 'error', message: 'Gagal menyimpan draft', error: err.message });
+  }
+});
+
+router.post('/get-draft', verifyToken, upload.none(), (req, res) => {
+  const { no_rawat } = req.body;
+
+  if (!no_rawat) {
+    return res.status(400).json({ status: 'error', message: 'no_rawat tidak ditemukan' });
+  }
+
+  const sanitizedNoRawat = no_rawat.replace(/\//g, '_');
+  const draftDir = path.join(__dirname, '../../webapps/berkasrawat/pages/upload/draft');
+
+  const possibleExt = ['.jpg', '.jpeg', '.png', '.pdf'];
+  for (const ext of possibleExt) {
+    const fileName = `${sanitizedNoRawat}${ext}`;
+    const filePath = path.join(draftDir, fileName);
+
+    if (fs.existsSync(filePath)) {
+      const fileUrl = `http://114.30.92.12:8988/webapps/berkasrawat/pages/upload/draft/${fileName}`;
+      return res.status(200).json({
+        status: 'success',
+        message: 'File ditemukan',
+        file_url: fileUrl,
+        file_name: fileName
+      });
+    }
+  }
+
+  return res.status(404).json({ status: 'error', message: 'File tidak ditemukan' });
 });
 
 module.exports = router;
